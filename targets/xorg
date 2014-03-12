@@ -17,12 +17,15 @@ XMETHOD="${XMETHOD:-x11}"
 # install lts-saucy xserver and drivers on haswell for precise
 if grep -q 0x8086 /sys/class/graphics/fb0/device/vendor 2>/dev/null \
     && grep -q 0x0a /sys/class/graphics/fb0/device/device 2>/dev/null \
-    && release -eq precise -ge raring -ge jessie; then
+    && release -eq precise -ge raring -ge jessie -ge 20; then
         if release -eq precise; then
             install --minimal xserver-xorg-lts-saucy libgl1-mesa-glx-lts-saucy \
                 xserver-xorg-input-all-lts-saucy x11-xserver-utils-lts-saucy \
                 libegl1-mesa-drivers-lts-saucy libtxc-dxtn-s2tc0 libtxc-dxtn0 \
                 xfonts-base xinit xinput x11-apps xterm
+        elif release -ge 20; then
+        # TODO: more packages needed. xorg packages for fedora > 20 release.
+            install xorg-x11 xorg-x11-drivers
         else
             install xorg
         fi

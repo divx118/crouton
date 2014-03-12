@@ -1,0 +1,64 @@
+#!/bin/sh -e
+# Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# This is a distro-specific bootstrap script, sourced from main.sh, and as such
+# has access to all of the variables set by main.sh, namely $tmp (the temporary
+# directory), $INSTALLERDIR/$DISTRO, $RELEASE, $BOOTSTRAP_RELEASE (if different
+# from $RELEASE), $ARCH, and $MIRROR.
+
+# Get a package list starting with the first letter of the required package
+getpackagelist() {
+local first=$1
+echo 'Downloading mirror package listing starting with:' "$first"
+wget "$MIRROR/Packages"/$first -O "$tmp"/$first.html
+cat "$tmp"/$first.html | grep -o -E 'href="([^"#]+)"' | cut -d'"' -f2 | sort | uniq > $tmp/$first.rpmlist.txt
+
+}
+
+#Add path so scripts in $tmp can be called without full path name
+newpath="$PATH:$tmp"
+
+# Add the necessary debootstrap executables and packages required list
+cp "$INSTALLERDIR/$DISTRO/bash_rpm_cpio.sh" "$INSTALLERDIR/$DISTRO/bash_cpio.sh" "$INSTALLERDIR/$DISTRO/fedora_rpms_req.txt" "$tmp/"
+chmod 755 "$tmp/bash_rpm_cpio.sh" "$tmp/bash_cpio.sh"
+
+# Create $subdir
+mkdir -p "$tmp"/"$subdir"
+
+# Determine packages full names including version: Then gather packages for chroot environment
+echo 'Downloading packages required for bootstrap'
+while read -r name;
+do
+    local first=`echo $name | cut -c1-1`
+
+    if [ ! -f "$tmp"/$first.rpmlist.txt ]; then
+        getpackagelist $first
+    fi
+#  printf 'Pattern: %q\nPackage name and version: %q\n' "$name" "$wgetvar"
+    if wgetvar=$(grep -E "^$name"-[0-9] "$tmp"/$first.rpmlist.txt); then
+        wget "$MIRROR/Packages"/$first/"$wgetvar" -O "$tmp"/"$subdir"/"$wgetvar"
+        echo 'Package name and version :' "$wgetvar"
+        echo 'Downloading package'
+    fi
+done < "$tmp"/fedora_rpms_req.txt
+
+#Announce all packages downloaded
+echo 'All packages on local system for simple chroot'
+ls "$tmp"/"$subdir"/*.rpm
+
+(
+# Now in sub shell
+# All scripts and packages are now in $tmp: cd into $tmp/$subdir to create chroot filesystem and extract packages via scripts
+cd "$tmp/$subdir"
+
+#filesystem*.rpm package must be extracted first, or bootstrap filesystem will not suit the RPM package manager
+echo 'creating fedora ready filesystem'
+"$tmp"/bash_rpm_cpio.sh "$tmp"/"$subdir"/filesystem*.rpm | "$tmp"/bash_cpio.sh -idmv
+
+# extraction of packages into chroot filesystem:
+echo 'Extracting packages into created file system'
+find "$tmp"/"$subdir" -type f -name '*.rpm' | xargs -n1 -ifile sh -c ""$tmp"/bash_rpm_cpio.sh file | "$tmp"/bash_cpio.sh -idmv"
+
+)

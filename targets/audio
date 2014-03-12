@@ -164,19 +164,30 @@ build_cras() {
         archgccflags='-m32'
 
         # Add foreign architecture, if necessary
-        if ! dpkg --print-foreign-architectures | grep -q "^$cras_arch$"; then
-            echo "Adding foreign architecture $cras_arch to dpkg..." 1>&2
-            dpkg --add-architecture "$cras_arch"
-            apt-get update
+        if [ "${DISTROAKA:-"$DISTRO"}" = 'debian' ]; then
+            if ! dpkg --print-foreign-architectures | grep -q "^$cras_arch$"; then
+                echo "Adding foreign architecture $cras_arch to dpkg..." 1>&2
+                dpkg --add-architecture "$cras_arch"
+                apt-get update
+            fi
+        elif [ "${DISTROAKA:-"$DISTRO"}" = 'fedora' ]; then
+            pkgdepextra=''
+            pkgsuffix=".i686"
+            pkgconfigpath="/usr/lib/pkgconfig/"
         fi
     fi
 
     # Install CRAS dependencies
-    install --minimal alsa-utils \
-        libasound2$pkgsuffix libspeexdsp1$pkgsuffix
+    if [ "${DISTROAKA:-"$DISTRO"}" = 'debian' ]; then
+        install --minimal alsa-utils \
+            libasound2$pkgsuffix libspeexdsp1$pkgsuffix \
+            libspeexdsp-dev$pkgsuffix pkg-config libc6-dev$pkgsuffix
+    elif [ "${DISTROAKA:-"$DISTRO"}" = 'fedora' ]; then
+        install --minimal alsa-utils alsa-lib-devel$pkgsuffix \
+            pkgconfig glibc-devel$pkgsuffix speex-devel$pkgsuffix
+    fi
 
-    install --minimal --asdeps gcc $pkgdepextra libc6-dev$pkgsuffix \
-        pkg-config libspeexdsp-dev$pkgsuffix
+    install --minimal --asdeps gcc $pkgdepextra
 
     # precise does not allow libasound2-dev and libasound2-dev:i386 to be
     # installed simultaneously
@@ -189,8 +200,11 @@ build_cras() {
             ln -sfT libasound.so.2 "$libasoundso"
         fi
         ALSALIBDIR="/usr/lib$archextrapath/alsa-lib"
-    else
+    elif [ "${DISTROAKA:-"$DISTRO"}" != 'fedora' ]; then
         install --minimal --asdeps libasound2-dev$pkgsuffix
+        ALSALIBDIR="`PKG_CONFIG_PATH="$pkgconfigpath" \
+                                pkg-config --variable=libdir alsa`/alsa-lib"
+    else
         ALSALIBDIR="`PKG_CONFIG_PATH="$pkgconfigpath" \
                                 pkg-config --variable=libdir alsa`/alsa-lib"
     fi
@@ -207,6 +221,8 @@ build_cras() {
                             'pool/main/s/sbc' '.*~bpo7\+.*' $cras_arch
         install_mirror_package --asdeps 'libsbc-dev' \
                             'pool/main/s/sbc' '.*~bpo7\+.*' $cras_arch
+    elif [ "${DISTROAKA:-"$DISTRO"}" = 'fedora' ]; then
+        install --minimal sbc-devel$pkgsuffix tar
     else
         install --minimal libsbc1$pkgsuffix
         install --minimal --asdeps libsbc-dev$pkgsuffix
