@@ -35,7 +35,14 @@ if [ "${DISTROAKA:-"$DISTRO"}" = 'debian' ]; then
 fi
 
 # Add the primary user
-groups='audio,video,sudo,plugdev'
+if [ "${DISTROAKA:-"$DISTRO"}" = 'fedora' ]; then
+# fedora uses group wheel instead of sudo
+    groups='audio,video,wheel,plugdev'
+    install passwd
+else
+    groups='audio,video,sudo,plugdev'
+fi
+
 if ! grep -q ':1000:' /etc/passwd; then
     while ! echo "$username" | grep -q '^[a-z][-a-z0-9_]*$'; do
         if [ -n "$username" ]; then
