@@ -178,16 +178,14 @@ build_cras() {
     fi
 
     # Install CRAS dependencies
-    if [ "${DISTROAKA:-"$DISTRO"}" = 'debian' ]; then
-        install --minimal alsa-utils \
-            libasound2$pkgsuffix libspeexdsp1$pkgsuffix \
-            libspeexdsp-dev$pkgsuffix pkg-config libc6-dev$pkgsuffix
-    elif [ "${DISTROAKA:-"$DISTRO"}" = 'fedora' ]; then
-        install --minimal alsa-utils alsa-lib-devel$pkgsuffix \
-            pkgconfig glibc-devel$pkgsuffix speex-devel$pkgsuffix
-    fi
+    install --minimal alsa-utils \
+        libasound2$pkgsuffix libspeexdsp1$pkgsuffix \
+        libspeexdsp-dev$pkgsuffix pkg-config libc6-dev$pkgsuffix, \
+        fedora=alsa-utils speex$pkgsuffix alsa-lib$pkgsuffix
 
-    install --minimal --asdeps gcc $pkgdepextra
+    install --minimal --asdeps gcc $pkgdepextra libc6-dev$pkgsuffix \
+        pkg-config libspeexdsp-dev$pkgsuffix,fedora=alsa-lib-devel$pkgsuffix \
+        pkgconfig glibc-devel$pkgsuffix speex-devel$pkgsuffix gcc
 
     # precise does not allow libasound2-dev and libasound2-dev:i386 to be
     # installed simultaneously
@@ -200,11 +198,9 @@ build_cras() {
             ln -sfT libasound.so.2 "$libasoundso"
         fi
         ALSALIBDIR="/usr/lib$archextrapath/alsa-lib"
-    elif [ "${DISTROAKA:-"$DISTRO"}" != 'fedora' ]; then
-        install --minimal --asdeps libasound2-dev$pkgsuffix
-        ALSALIBDIR="`PKG_CONFIG_PATH="$pkgconfigpath" \
-                                pkg-config --variable=libdir alsa`/alsa-lib"
     else
+        install --minimal --asdeps libasound2-dev$pkgsuffix, \
+            fedora=alsa-lib-devel$pkgsuffix
         ALSALIBDIR="`PKG_CONFIG_PATH="$pkgconfigpath" \
                                 pkg-config --variable=libdir alsa`/alsa-lib"
     fi
@@ -221,11 +217,10 @@ build_cras() {
                             'pool/main/s/sbc' '.*~bpo7\+.*' $cras_arch
         install_mirror_package --asdeps 'libsbc-dev' \
                             'pool/main/s/sbc' '.*~bpo7\+.*' $cras_arch
-    elif [ "${DISTROAKA:-"$DISTRO"}" = 'fedora' ]; then
-        install --minimal sbc-devel$pkgsuffix tar
     else
-        install --minimal libsbc1$pkgsuffix
-        install --minimal --asdeps libsbc-dev$pkgsuffix
+        install --minimal libsbc1$pkgsuffix,fedora=sbc$pkgsuffix tar
+        install --minimal --asdeps libsbc-dev$pkgsuffix, \
+            fedora=sbc-devel$pkgsuffix
     fi
 
     # Start subshell for compilation

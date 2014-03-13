@@ -23,11 +23,8 @@ if grep -q 0x8086 /sys/class/graphics/fb0/device/vendor 2>/dev/null \
                 xserver-xorg-input-all-lts-saucy x11-xserver-utils-lts-saucy \
                 libegl1-mesa-drivers-lts-saucy libtxc-dxtn-s2tc0 libtxc-dxtn0 \
                 xfonts-base xinit xinput x11-apps xterm
-        elif release -ge 20; then
-        # TODO: more packages needed. xorg packages for fedora > 20 release.
-            install xorg-x11 xorg-x11-drivers
         else
-            install xorg
+            install xorg,fedora=xorg-x11-drivers xorg-x11-apps xorg-x11-xinit
         fi
         # intel xorg config file for haswell
         ln -sfT "/etc/crouton/20-intel-crouton.conf" "/usr/share/X11/xorg.conf.d/20-intel-crouton.conf"
@@ -37,7 +34,7 @@ fi
 install dmz-cursor-theme kbd
 
 # Fix launching X11 from inside crosh (user doesn't own a TTY)
-sed -i 's/allowed_users=.*/allowed_users=anybody/' '/etc/X11/Xwrapper.config'
+sed -i 's/allowed_users=.*/allowed_users=anybody/' '/etc/X11/Xwrapper.config' || true
 
 # Make chvt and fgconsole SUID root so we don't need to run keylaunch as root
 chmod u+s /bin/chvt
