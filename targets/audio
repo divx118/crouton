@@ -179,14 +179,14 @@ build_cras() {
 
     # Install CRAS dependencies
     install --minimal alsa-utils \
-        libasound2$pkgsuffix libspeexdsp1$pkgsuffix \
-        libspeexdsp-dev$pkgsuffix pkg-config libc6-dev$pkgsuffix, \
-        fedora=alsa-utils speex$pkgsuffix alsa-lib$pkgsuffix
+        libasound2$pkgsuffix,fedora=alsa-lib$pkgsuffix \
+        libspeexdsp1$pkgsuffix,fedora=speex$pkgsuffix
 
-    install --minimal --asdeps gcc $pkgdepextra libc6-dev$pkgsuffix \
-        pkg-config libspeexdsp-dev$pkgsuffix,fedora=alsa-lib-devel$pkgsuffix \
-        pkgconfig glibc-devel$pkgsuffix speex-devel$pkgsuffix gcc
-
+    install --minimal --asdeps gcc $pkgdepextra \
+        libc6-dev$pkgsuffix,fedora=glibc-devel$pkgsuffix \
+        pkg-config,fedora=pkgconfig \
+        libspeexdsp-dev$pkgsuffix,fedora=speex-devel$pkgsuffix
+        
     # precise does not allow libasound2-dev and libasound2-dev:i386 to be
     # installed simultaneously
     if release -le precise && [ -n "$cras_arch" ]; then
@@ -199,8 +199,7 @@ build_cras() {
         fi
         ALSALIBDIR="/usr/lib$archextrapath/alsa-lib"
     else
-        install --minimal --asdeps libasound2-dev$pkgsuffix, \
-            fedora=alsa-lib-devel$pkgsuffix
+        install --minimal --asdeps libasound2-dev$pkgsuffix,fedora=alsa-lib-devel$pkgsuffix
         ALSALIBDIR="`PKG_CONFIG_PATH="$pkgconfigpath" \
                                 pkg-config --variable=libdir alsa`/alsa-lib"
     fi
@@ -218,9 +217,8 @@ build_cras() {
         install_mirror_package --asdeps 'libsbc-dev' \
                             'pool/main/s/sbc' '.*~bpo7\+.*' $cras_arch
     else
-        install --minimal libsbc1$pkgsuffix,fedora=sbc$pkgsuffix tar
-        install --minimal --asdeps libsbc-dev$pkgsuffix, \
-            fedora=sbc-devel$pkgsuffix
+        install --minimal libsbc1$pkgsuffix,fedora=sbc$pkgsuffix,
+        install --minimal --asdeps libsbc-dev$pkgsuffix,fedora=sbc-devel$pkgsuffix
     fi
 
     # Start subshell for compilation

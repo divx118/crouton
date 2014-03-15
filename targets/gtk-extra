@@ -7,7 +7,7 @@ DESCRIPTION='GTK-based tools including gdebi, gksu, and a simple browser.'
 . "${TARGETSDIR:="$PWD"}/common"
 
 ### Append to prepare.sh:
-install gdebi gksu netsurf-gtk
+install gdebi,fedora= gksu,fedora= netsurf-gtk,fedora=midori
 
 # Add netsurf-gtk to Debian-alternatives if not already there
 netsurf='/usr/bin/netsurf-gtk'

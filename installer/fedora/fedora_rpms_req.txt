@@ -110,3 +110,4 @@ yum
 yum-utils
 fedora-release
 libstdc++
+tar
