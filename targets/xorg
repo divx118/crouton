@@ -31,7 +31,7 @@ if grep -q 0x8086 /sys/class/graphics/fb0/device/vendor 2>/dev/null \
 else
         install xorg
 fi
-install dmz-cursor-theme,fedora=dmz-cursor-them.noarch kbd
+install dmz-cursor-theme,fedora=dmz-cursor-themes.noarch kbd
 
 # Fix launching X11 from inside crosh (user doesn't own a TTY)
 sed -i 's/allowed_users=.*/allowed_users=anybody/' '/etc/X11/Xwrapper.config' || true

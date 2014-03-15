@@ -190,7 +190,6 @@ compile() {
     shift 2
     # TODO: $pkgs not working correctly when compiling croutonxi2event 
     local pkgs="gcc libc6-dev,fedora=glibc-devel $*"
-    echo "install $pkgs"
     install --minimal --asdeps $pkgs </dev/null
     echo "Compiling $out..." 1>&2
     local tmp="`mktemp crouton.XXXXXX --tmpdir=/tmp`"
