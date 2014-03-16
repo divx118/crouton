@@ -32,7 +32,16 @@ echo 'Cleaning up...' 1>&2
 if [ "${DISTROAKA:-"$DISTRO"}" = 'debian' ]; then
     apt-get -y --purge autoremove
     apt-get clean
+elif [ "${DISTROAKA:-"$DISTRO"}" = 'fedora' ]; then
+# TODO: see if there is a better option to cleanup after chroot is build
+# There should be some equivalent to --asdep, maybe "yumdb search reason"
+# For now this will atleast cleanup gcc and some devel packages.
+    yum remove -y gcc
+    while [ `package-cleanup --leaves` != "" ]; do
+        yum remove -y `package-cleanup --leaves`
+    done
 fi
+
 
 # Add the primary user
 if [ "${DISTROAKA:-"$DISTRO"}" = 'fedora' ]; then
