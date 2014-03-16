@@ -37,7 +37,7 @@ elif [ "${DISTROAKA:-"$DISTRO"}" = 'fedora' ]; then
 # There should be some equivalent to --asdep, maybe "yumdb search reason"
 # For now this will atleast cleanup gcc and some devel packages.
     yum remove -y gcc
-    while [ `package-cleanup --leaves` != "" ]; do
+    while [ "`package-cleanup --leaves`" != "" ]; do
         yum remove -y `package-cleanup --leaves`
     done
 fi
