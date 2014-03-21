@@ -7,19 +7,11 @@
 # It must set at least ARCH and MIRROR if not already specified.
 
 if [ -z "$ARCH" ]; then
-    ARCH="`uname -m | sed -e 's i.86 i386 ;s x86_64 amd64 ;s arm.* armhf ;'`"
+    ARCH="`uname -m | sed -e 's i.86 i386 ;s arm.* armhfp ;'`"
 fi
 
 if [ -z "$MIRROR" ]; then
-    case "$ARCH" in
-
-        i386)   MIRROR="${CROUTON_MIRROR_fedora_i386:-http://fedora.mirror.nexicom.net/linux/releases/20/Fedora/i386/os}"
-                ;;
-        amd64)   MIRROR="${CROUTON_MIRROR_fedora_x86_64:-http://fedora.mirror.nexicom.net/linux/releases/20/Fedora/x86_64/os}"
-                ;;
-        armhf)   MIRROR="${CROUTON_MIRROR_fedora_armhf:-http://fedora.mirror.nexicom.net/linux/releases/20/Fedora/armhfp/os}"
-                ;;
-    esac
+    MIRROR="${CROUTON_MIRROR_fedora:-http://fedora.mirror.nexicom.net/linux/releases/$RELEASE/Fedora/$ARCH/os}"
 fi
 
 
