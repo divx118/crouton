@@ -35,7 +35,7 @@ cat > '/etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml' <<EOF
 </channel>
 EOF
 # TODO: See what is really needed for fedora xfce, now installing the whole package with @xfce
-install xfce4,fedora=@xfce xfce4-goodies,fedora= ubuntu=shimmer-themes, \
+install xfce4,fedora=@xfce xfce4-goodies,fedora=tango-icon-theme.noarch ubuntu=shimmer-themes, \
         -- dictionaries-common,fedora= hddtemp,fedora= xorg,fedora=
 
 TIPS="$TIPS
