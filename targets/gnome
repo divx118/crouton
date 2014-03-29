@@ -9,9 +9,10 @@ CHROOTBIN='startgnome gnome-session-wrapper'
 . "${TARGETSDIR:="$PWD"}/common"
 
 ### Append to prepare.sh:
-install --minimal evolution-data-server gnome-control-center \
-        gnome-screensaver gnome-session gnome-session-fallback \
-        gnome-shell gnome-themes-standard gvfs-backends nautilus unzip
+install --minimal evolution-data-server,fedora=@gnome-desktop gnome-control-center,fedora= \
+        gnome-screensaver,fedora= gnome-session,fedora= gnome-session-fallback,fedora= \
+        gnome-shell,fedora= gnome-themes-standard,fedora= gvfs-backends,fedora= nautilus,fedora= \
+        unzip,fedora=
 
 TIPS="$TIPS
 You can start GNOME via the startgnome host command: sudo startgnome

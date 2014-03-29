@@ -108,6 +108,9 @@ mount --bind /var/run /run
 
 exit 0
 EOF
+# Some additional font packages
+yum install dejavu-sans-fonts.noarch dejavu-sans-mono-fonts.noarch \
+        dejavu-serif-fonts.noarch tar vim-minimal
 chmod +x /etc/rc.local
 
 umount '/sys/fs/fuse/connections' '/var/run/lock' '/var/run'

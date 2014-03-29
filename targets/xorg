@@ -24,7 +24,8 @@ if grep -q 0x8086 /sys/class/graphics/fb0/device/vendor 2>/dev/null \
                 libegl1-mesa-drivers-lts-saucy libtxc-dxtn-s2tc0 libtxc-dxtn0 \
                 xfonts-base xinit xinput x11-apps xterm
         else
-            install xorg,fedora=xorg-x11-drivers ,fedora=xorg-x11-apps ,fedora=xorg-x11-xinit ,fedora=xterm
+            install xorg,fedora=xorg-x11-drivers ,fedora=xorg-x11-apps ,fedora=xorg-x11-xinit ,fedora=xterm \
+                ,fedora=mesa-filesystem ,fedora=mesa-dri-drivers ,fedora=mesa-libEGL ,fedora=mesa-libGLES
         fi
         # intel xorg config file for haswell
         ln -sfT "/etc/crouton/20-intel-crouton.conf" "/usr/share/X11/xorg.conf.d/20-intel-crouton.conf"

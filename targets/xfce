@@ -36,7 +36,7 @@ cat > '/etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml' <<EOF
 EOF
 # TODO: See what is really needed for fedora xfce, now installing the whole package with @xfce
 install xfce4,fedora=@xfce xfce4-goodies,fedora=tango-icon-theme.noarch ubuntu=shimmer-themes, \
-        -- dictionaries-common,fedora= hddtemp,fedora= xorg,fedora=
+        -- dictionaries-common,fedora=open-sans-fonts.noarch hddtemp,fedora= xorg,fedora=
 
 TIPS="$TIPS
 You can start Xfce via the startxfce4 host command: sudo startxfce4
