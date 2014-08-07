@@ -1,0 +1,100 @@
+#!/bin/sh
+# This script will be used as an action script of the udev rule
+# and as setting up the udev rule.
+
+# check if script is run as root
+uid=`id -u $USERNAME`
+if [ $uid -ne 0 ]; then
+  echo "$0 must be run as root"
+  exit 1
+fi
+# Use this to create a unique name for the loop file.
+kernel_devname=$2
+# mount options to specify in the udev rule.
+mount_options=$3
+if [ -z $mount_options ];then
+  mount_options="rw,dirsync,nosuid,nodev,noexec,relatime"
+fi
+# Magic seems to be happening here.
+mount_extfs() {
+  loopfile_path="/usr/local/"
+  if [ "${ID_FS_TYPE##ext*}" != "$ID_FS_TYPE" ];then
+    # Creating loop file 
+    dd if=/dev/zero of=$loopfile_path$kernel_devname bs=1KB count=40
+    mkfs.vfat $loopfile_path$kernel_devname -n $ID_FS_LABEL
+    # Find unused loop device 
+    loop=`losetup -f` 
+    losetup $loop $loopfile_path$kernel_devname
+     
+ 
+    found=0 
+    first=0
+    # start monitoring dbus crosdisks to receive the mountpoint.
+    dbus-monitor --system --monitor \
+      'interface=org.chromium.CrosDisks, member=MountCompleted' \
+      |while read line;do
+      
+      loop_mount=`echo $line|grep "string \"/"`
+      if [ $first -eq 0 ];then
+        # Send mount command to crosdisk
+        dbus-send --print-reply --system --dest=org.chromium.CrosDisks \
+          /org/chromium/CrosDisks org.chromium.CrosDisks.Mount \
+          string:$loop string:"" array:string:"ro"
+        first=1
+      fi 
+
+      if [ "x$loop_mount" != "x" ];then
+        loop_mount=`echo $loop_mount|cut -d " " -f 2|sed -e s/\"//g`
+        if [ $found -eq 1 ];then
+          # Mounting the partition 
+          mount $DEVNAME "$loop_mount" -o "$mount_options"
+          # I guess we should start monitoring /proc/mounts which seems
+          # to be the only option.
+          if [ "x`ps -aux|grep unmount-loop|grep -v grep`" = "x" ];then
+            /usr/local/bin/unmount-loop
+          fi 
+          exit 0
+        fi
+        if [ "x$loop_mount" = "x$loop" ];then
+          # we found our loop device next string will be the mountpoint. 
+          found=1
+        fi 
+      else
+        # We should add a time restriction so it can't run forever. 
+        continue
+      fi 
+    done 
+  fi
+}
+
+setup_udevrule() {
+  mkdir -p /run/udev/rules.d
+  rules_file="/run/udev/rules.d/10-mountextfs.rules" 
+  if [ ! -f "$rules_file" ];then
+    echo "# udev rule for mounting ext2/3/4 formatted usb devices and sd-cards" \
+      > "$rules_file" 
+    echo 'ACTION=="add", SUBSYSTEM=="block", KERNEL=="sd??", \
+      RUN+="/usr/local/bin/mount-extfs start %k"' >> "$rules_file"
+    # Update the udev rules 
+    udevadm control --reload-rules
+  else
+    echo "$rules_file already exists nothing todo."
+    exit 0 
+  fi
+}
+# Just for now everything in one script file.
+case "$1" in
+  start)
+    mount_extfs
+    ;;
+  setup)
+    setup_udevrule 
+    echo "done" 
+    exit 0 
+    ;;
+
+  *)
+    echo "Usage: $0 {setup}"
+esac
+exit 0
+
