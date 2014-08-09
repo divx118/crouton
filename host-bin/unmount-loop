@@ -11,7 +11,7 @@ while [ "x`cat /proc/mounts|grep /dev/loop )`" != "x" -a \
     # check if our ext2/3/4 device is still mounted
     device=`cat /proc/mounts|grep $mountpoint|grep -v $loopdevice`
     if [ "x$device" = "x" ];then
-      umount -d $loopdevice
+      umount -d $loopdevice || umount $mountpoint && losetup -d $loopdevice
     
       # Be sure the directory is empty before deleting. 
       if [ "x`ls -A $mountpoint`" = "x" ];then
