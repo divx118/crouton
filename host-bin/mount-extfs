@@ -25,7 +25,7 @@ mount_extfs() {
   loopfile_path="/usr/local/"
   if [ "${ID_FS_TYPE##ext*}" != "$ID_FS_TYPE" ];then
     # Creating loop file 
-    dd if=/dev/zero of=$loopfile_path$kernel_devname bs=1KB count=40
+    dd if=/dev/zero of=$loopfile_path$kernel_devname bs=1KB count=128
     # Use UUID when we have no label.
     if [ -z $ID_FS_LABEL ];then
       ID_FS_LABEL=$ID_FS_UUID
@@ -34,11 +34,11 @@ mount_extfs() {
     # Find unused loop device
     # TODO: Using a sleep here, it somehow prevents devices getting
     # the same loop device not working everytime.
-    sleep 1
-    loop=`losetup -f` 
-    losetup $loop $loopfile_path$kernel_devname
-     
- 
+    # UPDATE: added different sleeptimer, depends on partition number
+    # This works well for now with the increased fat partition of 128KB.
+    # FIXME: No fan of sleep timers for this.
+    sleep $((${kernel_devname##???}/4))
+    loop=`losetup -f --show $loopfile_path$kernel_devname`
     found=0 
     first=0
     # start monitoring dbus crosdisks to receive the mountpoint.

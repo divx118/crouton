@@ -1,7 +1,13 @@
 #!/bin/sh
-# script to cleanup leftover loopdevices from mountextfs.
+# Script to cleanup leftover loopdevices from mountextfs.
 # The script keeps running until there are no mounted loops
 # with a mountpoint on /media/removable.
+
+# Turn on/off verbose debugging by uncomment/comment
+#set -x
+#exec 2>/var/log/mountloop.log
+
+# Start checking /proc/mounts
 while [ "x`cat /proc/mounts|grep /dev/loop )`" != "x" -a \
   "x`cat /proc/mounts|grep /media/removable )`" != "x" ];do 
   cat /proc/mounts|grep /dev/loop| \
@@ -10,9 +16,14 @@ while [ "x`cat /proc/mounts|grep /dev/loop )`" != "x" -a \
     loopdevice=`echo "$line"|cut -d " " -f 1` 
     # check if our ext2/3/4 device is still mounted
     device=`cat /proc/mounts|grep $mountpoint|grep -v $loopdevice`
+    # TODO: This should be done better, but works for now.
     if [ "x$device" = "x" ];then
-      umount -d $loopdevice || umount $mountpoint && losetup -d $loopdevice
-    
+      if ! umount $loopdevice;then
+        umount $mountpoint
+        losetup -d $loopdevice
+      else
+        losetup -d $loopdevice
+      fi
       # Be sure the directory is empty before deleting. 
       if [ "x`ls -A $mountpoint`" = "x" ];then
         rm -r $mountpoint
