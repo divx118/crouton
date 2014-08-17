@@ -1,6 +1,7 @@
 #!/bin/sh
 # This script will be used as an action script of the udev rule
-# and as setting up the udev rule.
+# for mounting ext2/3/4 partitions on USB or SD-cards.
+# and as setting up the udev rule to trigger it.
 
 # check if script is run as root
 uid=`id -u $USERNAME`
@@ -20,63 +21,74 @@ mount_options=$3
 if [ -z $mount_options ];then
   mount_options="rw,dirsync,nosuid,nodev,noexec,relatime"
 fi
+loops=""
 # Magic seems to be happening here.
 mount_extfs() {
-  loopfile_path="/usr/local/"
-  if [ "${ID_FS_TYPE##ext*}" != "$ID_FS_TYPE" ];then
-    # Creating loop file 
-    dd if=/dev/zero of=$loopfile_path$kernel_devname bs=1KB count=128
-    # Use UUID when we have no label.
-    if [ -z $ID_FS_LABEL ];then
-      ID_FS_LABEL=$ID_FS_UUID
-    fi
-    mkfs.vfat $loopfile_path$kernel_devname -n "$ID_FS_LABEL"
-    # Find unused loop device
-    # TODO: Using a sleep here, it somehow prevents devices getting
-    # the same loop device not working everytime.
-    # UPDATE: added different sleeptimer, depends on partition number
-    # This works well for now with the increased fat partition of 128KB.
-    # FIXME: No fan of sleep timers for this.
-    sleep $((${kernel_devname##???}/4))
-    loop=`losetup -f --show $loopfile_path$kernel_devname`
-    found=0 
-    first=0
-    # start monitoring dbus crosdisks to receive the mountpoint.
-    dbus-monitor --system --monitor \
-      'interface=org.chromium.CrosDisks, member=MountCompleted' \
-      |while read line;do
+  loopfile_path="/usr/local"
+  touch /tmp/$kernel_devname
+  mkdir $loopfile_path/dev
+  i=0
+  # Setting up the loop devices
+  blkid /dev/$kernel_devname?|while read line;do
+    dev_part=`echo $line |cut -d ":" -f 1`
+    # The variable part_prop will look like
+    # LABEL="PartLabel" UUID="uuid" TYPE="fstype" PARTUUID="PartUuid"
+    # Replace the spaces with ; to eval the string.
+    part_prop=`echo $line |cut -d ":" -f 2-|sed 's/\" /\"\;/g'`
+    # Delete variables we use.
+    unset LABEL TYPE PARTUUID
+    eval $part_prop
+    if [ "${TYPE##ext*}" != "$TYPE" ];then
+      # Creating loop file 
+      dd if=/dev/zero of=$loopfile_path$dev_part bs=1KB count=128
+      # Use PARTUUID when we have no label.
+      if [ -z $LABEL ];then
+        LABEL=$PARTUUID
+      fi
+      mkfs.vfat $loopfile_path$dev_part -n "$LABEL"
+      loop_device=`losetup -f --show $loopfile_path$dev_part`
+      # Create a tmp file to pause the unmount-loop script
+      # and to store the loop devices, partition devices we
+      # used.
+      echo $loop_device","$dev_part >> /tmp/$kernel_devname
+      # Send the loop to CrosDisks to be mounted.
+      dbus-send --print-reply --system --dest=org.chromium.CrosDisks \
+        /org/chromium/CrosDisks org.chromium.CrosDisks.Mount \
+        string:$loop_device string:"" array:string:"ro"
       
-      loop_mount=`echo $line|grep "string \"/"`
-      if [ $first -eq 0 ];then
-        # Send mount command to crosdisk
-        dbus-send --print-reply --system --dest=org.chromium.CrosDisks \
-          /org/chromium/CrosDisks org.chromium.CrosDisks.Mount \
-          string:$loop string:"" array:string:"ro"
-        first=1
-      fi 
+    fi
+  done
+  # TODO: check if 9 seconds will be enough or too much
+  # to know if the partitions are mounted.
+  # Mounting the ext2/3/4 partitions.
+  j=0
+  while [ "x`cat /tmp/$kernel_devname`" != "x" -a $j -lt 10 ];do
+    # loop through the loop devices we created.
+    for line in `cat /tmp/$kernel_devname`;do
+      loop_device=`echo $line|cut -d "," -f 1`
+      dev_part=`echo $line|cut -d "," -f 2`
+      # Get the mount directory from /proc/mounts CrosDisks
+      # created.
+      mount_point=`cat /proc/mounts|grep -v \
+        "/run/crouton/mnt/stateful_partition" \
+        |grep $loop_device|cut -d " " -f 2 \
+        |sed 's/\\\040/ /g'`
+      # mounting the partition on top of the loop
+      mount $dev_part "$mount_point" -o "$mount_options"
+      # remove loop_device from the tmp file
+      loop_device=`echo $loop_device|sed 's/\//\\\\\//g'`
+      sed --in-place "/$loop_device/d" /tmp/$kernel_devname
+    done
+    # Try x times to give CrosDisks some time.
+    j=$(( $j+1 ))
+    sleep 1
+  done
+  # cleanup the tmp file we use, this is also used to pause
+  # the unmount-loop script to prevent new created loop devices
+  # to unmount when the ext2/3/4 partition is not mounted yet.
+  rm /tmp/$kernel_devname
+  exit 0
 
-      if [ "x$loop_mount" != "x" ];then
-        loop_mount=`echo $loop_mount|grep -o '".*"'|tr -d '"'`
-        if [ $found -eq 1 ];then
-          # Mounting the partition 
-          mount $DEVNAME "$loop_mount" -o "$mount_options"
-          # I guess we should start monitoring /proc/mounts which seems
-          # to be the only option.
-          if [ "x`ps -aux|grep unmount-loop|grep -v grep`" = "x" ];then
-            /usr/local/bin/unmount-loop &
-          fi 
-          exit 0
-        fi
-        if [ "x$loop_mount" = "x$loop" ];then
-          # we found our loop device next string will be the mountpoint. 
-          found=1
-        fi 
-      else
-        # We should add a time restriction so it can't run forever. 
-        continue
-      fi 
-    done 
-  fi
 }
 
 setup_udevrule() {
@@ -86,7 +98,7 @@ setup_udevrule() {
     echo "# udev rule for mounting ext2/3/4 formatted usb devices and sd-cards" \
       > "$rules_file"
     # TODO: Should 10 seconds be good? Needs testing...
-    echo 'ACTION=="add", SUBSYSTEM=="block", KERNEL=="sd??", \
+    echo 'ACTION=="add", SUBSYSTEM=="block", KERNEL=="sd?", \
       RUN+="/usr/bin/timeout 10s /usr/local/bin/mount-extfs start %k"' >> "$rules_file"
     # Update the udev rules 
     udevadm control --reload-rules
