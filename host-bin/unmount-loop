@@ -5,25 +5,22 @@
 
 # Turn on/off verbose debugging by uncomment/comment
 #set -x
-#exec 2>/var/log/mountloop.log
+#exec 2>/var/log/unmountloop.log
 
 # Start checking /proc/mounts
 while [ "x`cat /proc/mounts|grep /dev/loop )`" != "x" -a \
   "x`cat /proc/mounts|grep /media/removable )`" != "x" ];do 
-  cat /proc/mounts|grep /dev/loop| \
+  cat /proc/mounts|grep /dev/loop|grep -v \
+    "/run/crouton/mnt/stateful_partition"| \
   while read line;do
     mountpoint=`echo "$line"|cut -d " " -f 2`
     loopdevice=`echo "$line"|cut -d " " -f 1` 
     # check if our ext2/3/4 device is still mounted
     device=`cat /proc/mounts|grep $mountpoint|grep -v $loopdevice`
-    # TODO: This should be done better, but works for now.
-    if [ "x$device" = "x" ];then
-      if ! umount $loopdevice;then
-        umount $mountpoint
-        losetup -d $loopdevice
-      else
-        losetup -d $loopdevice
-      fi
+    if [ "x$device" = "x" -a ! -f /tmp/sd? ];then
+      # Unmount the loopdevice and free it
+      umount $mountpoint
+      losetup -d $loopdevice
       # Be sure the directory is empty before deleting. 
       if [ "x`ls -A $mountpoint`" = "x" ];then
         rm -r $mountpoint
