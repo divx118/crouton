@@ -25,7 +25,6 @@ loops=""
 # Magic seems to be happening here.
 mount_extfs() {
   loopfile_path="/usr/local"
-  touch /tmp/$kernel_devname
   mkdir $loopfile_path/dev
   i=0
   # Setting up the loop devices
@@ -86,7 +85,12 @@ mount_extfs() {
   # cleanup the tmp file we use, this is also used to pause
   # the unmount-loop script to prevent new created loop devices
   # to unmount when the ext2/3/4 partition is not mounted yet.
-  rm /tmp/$kernel_devname
+  if [ -f /tmp/$kernel_devname ];then
+    rm /tmp/$kernel_devname
+    if [ "x`ps -aux|grep unmount-loop|grep -v grep`" = "x" ];then
+      /usr/local/bin/unmount-loop &
+    fi
+  fi
   exit 0
 
 }
@@ -99,7 +103,7 @@ setup_udevrule() {
       > "$rules_file"
     # TODO: Should 10 seconds be good? Needs testing...
     echo 'ACTION=="add", SUBSYSTEM=="block", KERNEL=="sd?", \
-      RUN+="/usr/bin/timeout 10s /usr/local/bin/mount-extfs start %k"' >> "$rules_file"
+      RUN+="/usr/local/bin/mount-extfs start %k"' >> "$rules_file"
     # Update the udev rules 
     udevadm control --reload-rules
   else
