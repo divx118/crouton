@@ -7,6 +7,7 @@
 #set -x
 #exec 2>/var/log/unmountloop.log
 
+mountextfs_tmp="/tmp/mount-extfs/"
 # Start checking /proc/mounts
 while [ "x`cat /proc/mounts|grep /dev/loop )`" != "x" -a \
   "x`cat /proc/mounts|grep /media/removable )`" != "x" ];do 
@@ -21,7 +22,7 @@ while [ "x`cat /proc/mounts|grep /dev/loop )`" != "x" -a \
     loopdevice=`echo "$line"|cut -d ";" -f 1` 
     # check if our ext2/3/4 device is still mounted
     device=`cat /proc/mounts|grep "$mountpoint"|grep -v $loopdevice`
-    if [ "x$device" = "x" -a ! -f /tmp/sd? ];then
+    if [ "x$device" = "x" -a ! -f "$mountextfs_tmp"sd? ];then
       # Unmount the loopdevice and free it
       umount "$mountpoint"
       losetup -d $loopdevice

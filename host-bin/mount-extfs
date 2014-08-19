@@ -21,11 +21,12 @@ mount_options=$3
 if [ -z $mount_options ];then
   mount_options="rw,dirsync,nosuid,nodev,noexec,relatime"
 fi
-loops=""
 # Magic seems to be happening here.
 mount_extfs() {
-  loopfile_path="/usr/local"
-  mkdir $loopfile_path/dev
+  mountextfs_tmp="/tmp/mount-extfs/"
+  if [ ! -d $mountextfs_tmp ];then
+    mkdir $mountextfs_tmp
+  fi
   # Setting up the loop devices
   blkid /dev/$kernel_devname?|while read line;do
     dev_part=`echo $line |cut -d ":" -f 1`
@@ -38,7 +39,7 @@ mount_extfs() {
     eval $part_prop
     if [ "${TYPE##ext*}" != "$TYPE" ];then
       # Creating loop file 
-      dd if=/dev/zero of=$loopfile_path$dev_part bs=1KB count=128
+      dd if=/dev/zero of=$mountextfs_tmp${dev_part##*/} bs=1KB count=128
       # Use PARTUUID when we have no label.
       if [ -z "$LABEL" ];then
         LABEL=$PARTUUID
@@ -48,14 +49,13 @@ mount_extfs() {
       # We have a simular problem when using identical labels for
       # the partitions. We solve that by prefixing it with the last
       # 2 characters of the device partition name.
-      LABEL=`echo $dev_part|cut -d "/" -f 3| \
-        sed 's/sd//g'`"."`echo $LABEL|sed 's/ /_/g'`
-      mkfs.vfat $loopfile_path$dev_part -n "$LABEL"
-      loop_device=`losetup -f --show $loopfile_path$dev_part`
+      LABEL=${dev_part##*/??}"."`echo $LABEL|sed 's/ /_/g'`
+      mkfs.vfat $mountextfs_tmp${dev_part##*/} -n "$LABEL"
+      loop_device=`losetup -f --show $mountextfs_tmp${dev_part##*/}`
       # Create a tmp file to pause the unmount-loop script
       # and to store the loop devices, partition devices we
       # used.
-      echo $loop_device","$dev_part >> /tmp/$kernel_devname
+      echo $loop_device","$dev_part >> $mountextfs_tmp$kernel_devname
       # Send the loop to CrosDisks to be mounted.
       dbus-send --print-reply --system --dest=org.chromium.CrosDisks \
         /org/chromium/CrosDisks org.chromium.CrosDisks.Mount \
@@ -66,9 +66,9 @@ mount_extfs() {
   # to know if the partitions are mounted.
   # Mounting the ext2/3/4 partitions.
   j=0
-  while [ "x`cat /tmp/$kernel_devname`" != "x" -a $j -lt 10 ];do
+  while [ "x`cat $mountextfs_tmp$kernel_devname`" != "x" -a $j -lt 10 ];do
     # loop through the loop devices we created.
-    for line in `cat /tmp/$kernel_devname`;do
+    for line in `cat $mountextfs_tmp$kernel_devname`;do
       loop_device=`echo $line|cut -d "," -f 1`
       dev_part=`echo $line|cut -d "," -f 2`
       # Get the mount directory from /proc/mounts CrosDisks
@@ -81,7 +81,7 @@ mount_extfs() {
       mount $dev_part "$mount_point" -o "$mount_options"
       # Remove loop_device from the tmp file
       loop_device=`echo $loop_device|sed 's/\//\\\\\//g'`
-      sed --in-place "/$loop_device/d" /tmp/$kernel_devname
+      sed --in-place "/$loop_device/d" $mountextfs_tmp$kernel_devname
     done
     # Try x times to give CrosDisks some time.
     j=$(( $j+1 ))
@@ -90,8 +90,8 @@ mount_extfs() {
   # cleanup the tmp file we use, this is also used to pause
   # the unmount-loop script to prevent new created loop devices
   # to unmount when the ext2/3/4 partition is not mounted yet.
-  if [ -f /tmp/$kernel_devname ];then
-    rm /tmp/$kernel_devname
+  if [ -f $mountextfs_tmp$kernel_devname ];then
+    rm $mountextfs_tmp$kernel_devname
     if [ "x`ps -aux|grep unmount-loop|grep -v grep`" = "x" ];then
       /usr/local/bin/unmount-loop &
     fi
