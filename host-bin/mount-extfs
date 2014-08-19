@@ -26,7 +26,6 @@ loops=""
 mount_extfs() {
   loopfile_path="/usr/local"
   mkdir $loopfile_path/dev
-  i=0
   # Setting up the loop devices
   blkid /dev/$kernel_devname?|while read line;do
     dev_part=`echo $line |cut -d ":" -f 1`
@@ -41,9 +40,16 @@ mount_extfs() {
       # Creating loop file 
       dd if=/dev/zero of=$loopfile_path$dev_part bs=1KB count=128
       # Use PARTUUID when we have no label.
-      if [ -z $LABEL ];then
+      if [ -z "$LABEL" ];then
         LABEL=$PARTUUID
       fi
+      # FIXME: Replace spaces with underscore, mounting does not
+      # work correctly.
+      # We have a simular problem when using identical labels for
+      # the partitions. We solve that by prefixing it with the last
+      # 2 characters of the device partition name.
+      LABEL=`echo $dev_part|cut -d "/" -f 3| \
+        sed 's/sd//g'`"."`echo $LABEL|sed 's/ /_/g'`
       mkfs.vfat $loopfile_path$dev_part -n "$LABEL"
       loop_device=`losetup -f --show $loopfile_path$dev_part`
       # Create a tmp file to pause the unmount-loop script
@@ -54,7 +60,6 @@ mount_extfs() {
       dbus-send --print-reply --system --dest=org.chromium.CrosDisks \
         /org/chromium/CrosDisks org.chromium.CrosDisks.Mount \
         string:$loop_device string:"" array:string:"ro"
-      
     fi
   done
   # TODO: check if 9 seconds will be enough or too much
@@ -72,9 +77,9 @@ mount_extfs() {
         "/run/crouton/mnt/stateful_partition" \
         |grep $loop_device|cut -d " " -f 2 \
         |sed 's/\\\040/ /g'`
-      # mounting the partition on top of the loop
+      # Mounting the partition on top of the loop
       mount $dev_part "$mount_point" -o "$mount_options"
-      # remove loop_device from the tmp file
+      # Remove loop_device from the tmp file
       loop_device=`echo $loop_device|sed 's/\//\\\\\//g'`
       sed --in-place "/$loop_device/d" /tmp/$kernel_devname
     done
@@ -101,7 +106,6 @@ setup_udevrule() {
   if [ ! -f "$rules_file" ];then
     echo "# udev rule for mounting ext2/3/4 formatted usb devices and sd-cards" \
       > "$rules_file"
-    # TODO: Should 10 seconds be good? Needs testing...
     echo 'ACTION=="add", SUBSYSTEM=="block", KERNEL=="sd?", \
       RUN+="/usr/local/bin/mount-extfs start %k"' >> "$rules_file"
     # Update the udev rules 
