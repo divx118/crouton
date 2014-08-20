@@ -19,16 +19,18 @@ while [ "x`cat /proc/mounts|grep /dev/loop )`" != "x" -a \
     # why we replaced it with ; so we can use that 
     # as a delimiter.
     mountpoint=`echo "$line"|cut -d ";" -f 2`
-    loopdevice=`echo "$line"|cut -d ";" -f 1` 
+    loopdevice=`echo "$line"|cut -d ";" -f 1`
+    mountpoint_1=`echo $mountpoint|sed 's/ /\\\\\\\040/g'`
     # check if our ext2/3/4 device is still mounted
-    device=`cat /proc/mounts|grep "$mountpoint"|grep -v $loopdevice`
-    if [ "x$device" = "x" -a ! -f "$mountextfs_tmp"sd? ];then
+    if [ "x`cat /proc/mounts|grep -v $loopdevice| \
+        cut -d " " -f 2|grep -E "^$mountpoint_1$"`" = "x" \
+        -a ! -f "$mountextfs_tmp"sd? ];then
       # Unmount the loopdevice and free it
-      umount "$mountpoint"
-      losetup -d $loopdevice
+      umount -d "$loopdevice" #"$mountpoint"
+      #losetup -d $loopdevice
       # Be sure the directory is empty before deleting. 
       if [ "x`ls -A "$mountpoint"`" = "x" ];then
-        rm -r $mountpoint
+        rm -r "$mountpoint"
       fi
     fi
   done

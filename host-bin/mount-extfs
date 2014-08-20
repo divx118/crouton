@@ -49,7 +49,9 @@ mount_extfs() {
       # We have a simular problem when using identical labels for
       # the partitions. We solve that by prefixing it with the last
       # 2 characters of the device partition name.
-      LABEL=${dev_part##*/??}"."`echo $LABEL|sed 's/ /_/g'`
+      # If still having problems with spaces and identical label
+      # Uncomment line below.
+      #LABEL=${dev_part##*/??}"."`echo $LABEL|sed 's/ /_/g'`
       mkfs.vfat $mountextfs_tmp${dev_part##*/} -n "$LABEL"
       loop_device=`losetup -f --show $mountextfs_tmp${dev_part##*/}`
       # Create a tmp file to pause the unmount-loop script
