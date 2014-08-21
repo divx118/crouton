@@ -13,7 +13,6 @@ fi
 # Turn on/off verbose debugging by uncomment/comment
 #set -x
 #exec 2>/var/log/mountextfs.log
-
 # Use this to create a unique name for the loop file.
 kernel_devname=$2
 # mount options to specify in the udev rule.
@@ -27,6 +26,7 @@ mount_extfs() {
   if [ ! -d $mountextfs_tmp ];then
     mkdir $mountextfs_tmp
   fi
+
   # Setting up the loop devices
   blkid /dev/$kernel_devname?|while read line;do
     dev_part=`echo $line |cut -d ":" -f 1`
@@ -38,8 +38,6 @@ mount_extfs() {
     unset LABEL TYPE PARTUUID
     eval $part_prop
     if [ "${TYPE##ext*}" != "$TYPE" ];then
-      # Creating loop file 
-      dd if=/dev/zero of=$mountextfs_tmp${dev_part##*/} bs=1KB count=128
       # Use PARTUUID when we have no label.
       if [ -z "$LABEL" ];then
         LABEL=$PARTUUID
@@ -52,7 +50,10 @@ mount_extfs() {
       # If still having problems with spaces and identical label
       # Uncomment line below.
       #LABEL=${dev_part##*/??}"."`echo $LABEL|sed 's/ /_/g'`
-      mkfs.vfat $mountextfs_tmp${dev_part##*/} -n "$LABEL"
+      # Be sure the file is gone else mkfs.vfat will fail.
+      rm -f "$mountextfs_tmp${dev_part##*/}"
+      # Create loop file.
+      mkfs.vfat -C "$mountextfs_tmp${dev_part##*/}" 34 -n "$LABEL"
       loop_device=`losetup -f --show $mountextfs_tmp${dev_part##*/}`
       # Create a tmp file to pause the unmount-loop script
       # and to store the loop devices, partition devices we
