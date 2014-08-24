@@ -13,22 +13,39 @@ fi
 # Turn on/off verbose debugging by uncomment/comment
 #set -x
 #exec 2>/var/log/mountextfs.log
-# Use this to create a unique name for the loop file.
-kernel_devname=$2
-# mount options to specify in the udev rule.
-mount_options=$3
-if [ -z $mount_options ];then
-  mount_options="rw,dirsync,nosuid,nodev,noexec,relatime"
-fi
+APPLICATION="${0##*/}"
+BINDIR="`dirname "\`readlink -f "$0"\`"`"
+# Default mount options to specify in the udev rule.
+MOUNT_OPTIONS="rw,dirsync,nosuid,nodev,noexec,relatime"
+USAGE="$APPLICATION [options] name [...]
+
+Mounts one or more ext2/3/4 USB devices or SD-cards on top of a loop device
+which will then show up in the chromeos Files app.
+
+Options:
+    -d DEVICE        Kernel device name for example sdb ,sdc ,sdd etc.
+                     Normally passed by the UDEV rule.
+    -m MOUNT_OPTIONS Mount options for the partitions. Default: $MOUNT_OPTIONS\.
+    -s               Setup the UDEV rule."
+SETUP=0
+
+# Process arguments
+while getopts 'd:m:s' f; do
+    case "$f" in
+    d) KERNEL_DEVNAME="$OPTARG";;
+    m) MOUNT_OPTIONS="$OPTARG";;
+    s) SETUP=1;;
+    \?) echo "$USAGE"
+        exit 0;;
+    esac
+done
 # Magic seems to be happening here.
 mount_extfs() {
   mountextfs_tmp="/tmp/mount-extfs/"
-  if [ ! -d $mountextfs_tmp ];then
-    mkdir $mountextfs_tmp
-  fi
+  mkdir -p $mountextfs_tmp
 
   # Setting up the loop devices
-  blkid /dev/$kernel_devname?|while read line;do
+  blkid /dev/$KERNEL_DEVNAME?|while read line;do
     dev_part=`echo $line |cut -d ":" -f 1`
     # The variable part_prop will look like
     # LABEL="PartLabel" UUID="uuid" TYPE="fstype" PARTUUID="PartUuid"
@@ -37,19 +54,11 @@ mount_extfs() {
     # Delete variables we use.
     unset LABEL TYPE PARTUUID
     eval $part_prop
-    if [ "${TYPE##ext*}" != "$TYPE" ];then
+    if [ "x${TYPE##ext[2-4]}" != "x$TYPE" ];then
       # Use PARTUUID when we have no label.
       if [ -z "$LABEL" ];then
         LABEL=$PARTUUID
       fi
-      # FIXME: Replace spaces with underscore, mounting does not
-      # work correctly.
-      # We have a simular problem when using identical labels for
-      # the partitions. We solve that by prefixing it with the last
-      # 2 characters of the device partition name.
-      # If still having problems with spaces and identical label
-      # Uncomment line below.
-      #LABEL=${dev_part##*/??}"."`echo $LABEL|sed 's/ /_/g'`
       # Be sure the file is gone else mkfs.vfat will fail.
       rm -f "$mountextfs_tmp${dev_part##*/}"
       # Create loop file.
@@ -58,20 +67,21 @@ mount_extfs() {
       # Create a tmp file to pause the unmount-loop script
       # and to store the loop devices, partition devices we
       # used.
-      echo $loop_device","$dev_part >> $mountextfs_tmp$kernel_devname
+      echo $loop_device","$dev_part >> $mountextfs_tmp$KERNEL_DEVNAME
       # Send the loop to CrosDisks to be mounted.
       dbus-send --print-reply --system --dest=org.chromium.CrosDisks \
         /org/chromium/CrosDisks org.chromium.CrosDisks.Mount \
         string:$loop_device string:"" array:string:"ro"
     fi
   done
-  # TODO: check if 9 seconds will be enough or too much
+  # We will check at most 5 seconds /proc/mounts which should be
+  # enough time for crossdisks to mount the loops.
   # to know if the partitions are mounted.
   # Mounting the ext2/3/4 partitions.
   j=0
-  while [ "x`cat $mountextfs_tmp$kernel_devname`" != "x" -a $j -lt 10 ];do
+  while [ "x`cat $mountextfs_tmp$KERNEL_DEVNAME`" != "x" -a $j -lt 6 ];do
     # loop through the loop devices we created.
-    for line in `cat $mountextfs_tmp$kernel_devname`;do
+    for line in `cat $mountextfs_tmp$KERNEL_DEVNAME`;do
       loop_device=`echo $line|cut -d "," -f 1`
       dev_part=`echo $line|cut -d "," -f 2`
       # Get the mount directory from /proc/mounts CrosDisks
@@ -81,56 +91,46 @@ mount_extfs() {
         |grep $loop_device|cut -d " " -f 2 \
         |sed 's/\\\040/ /g'`
       # Mounting the partition on top of the loop
-      mount $dev_part "$mount_point" -o "$mount_options"
+      mount $dev_part "$mount_point" -o "$MOUNT_OPTIONS" || continue
       # Remove loop_device from the tmp file
       loop_device=`echo $loop_device|sed 's/\//\\\\\//g'`
-      sed --in-place "/$loop_device/d" $mountextfs_tmp$kernel_devname
+      sed --in-place "/$loop_device/d" $mountextfs_tmp$KERNEL_DEVNAME
     done
     # Try x times to give CrosDisks some time.
     j=$(( $j+1 ))
     sleep 1
   done
   # cleanup the tmp file we use, this is also used to pause
-  # the unmount-loop script to prevent new created loop devices
+  # the unmount-loop script to prevent newly created loop devices
   # to unmount when the ext2/3/4 partition is not mounted yet.
-  if [ -f $mountextfs_tmp$kernel_devname ];then
-    rm $mountextfs_tmp$kernel_devname
+  # Start the unmount-loop script if it isn't already running.
+  # TODO: add a check if we can't mount a device.
+  if [ -f $mountextfs_tmp$KERNEL_DEVNAME ];then
+    rm $mountextfs_tmp$KERNEL_DEVNAME
     if [ "x`ps -aux|grep unmount-loop|grep -v grep`" = "x" ];then
       /usr/local/bin/unmount-loop &
     fi
   fi
-  exit 0
-
 }
 
 setup_udevrule() {
-  mkdir -p /run/udev/rules.d
   rules_file="/run/udev/rules.d/10-mountextfs.rules" 
-  if [ ! -f "$rules_file" ];then
-    echo "# udev rule for mounting ext2/3/4 formatted usb devices and sd-cards" \
-      > "$rules_file"
-    echo 'ACTION=="add", SUBSYSTEM=="block", KERNEL=="sd?", \
-      RUN+="/usr/local/bin/mount-extfs start %k"' >> "$rules_file"
-    # Update the udev rules 
-    udevadm control --reload-rules
-  else
-    echo "$rules_file already exists nothing todo."
-    exit 0 
-  fi
+  mkdir -p "`dirname "$rules_file"`"
+  # Create the file, we don't care if it already exists. Just
+  # replace the old one so we can easily update the mount options.
+  echo "# udev rule for mounting ext2/3/4 formatted usb devices and sd-cards" \
+    > "$rules_file"
+  echo "ACTION==\"add\", SUBSYSTEM==\"block\", KERNEL==\"sd?\", \
+    RUN+="\"$BINDIR/$APPLICATION -d %k -m "$MOUNT_OPTIONS"\""" >> "$rules_file"
+  # Update the udev rules 
+  udevadm control --reload-rules
 }
-# Just for now everything in one script file.
-case "$1" in
-  start)
-    mount_extfs
-    ;;
-  setup)
-    setup_udevrule 
-    echo "done" 
-    exit 0 
-    ;;
-
-  *)
-    echo "Usage: $0 {setup}"
-esac
+# Mount or setting up.
+if [ $SETUP -eq 0 ];then
+  mount_extfs
+else
+  setup_udevrule 
+fi
 exit 0
+
 
