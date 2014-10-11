@@ -25,16 +25,16 @@ which will then show up in the chromeos Files app.
 Options:
     -d DEVICE        Kernel device name for example sdb ,sdc ,sdd etc.
                      Normally passed by the UDEV rule.
-    -m MOUNT_OPTIONS Mount options for the partitions. Default: $MOUNT_OPTIONS\.
+    -m MOUNT_OPTIONS Mount options for the partitions. Default: $MOUNT_OPTIONS.
     -s               Setup the UDEV rule."
-SETUP=0
+SETUP=''
 
 # Process arguments
 while getopts 'd:m:s' f; do
     case "$f" in
     d) KERNEL_DEVNAME="$OPTARG";;
     m) MOUNT_OPTIONS="$OPTARG";;
-    s) SETUP=1;;
+    s) SETUP='y';;
     \?) echo "$USAGE"
         exit 0;;
     esac
@@ -45,7 +45,7 @@ mount_extfs() {
   mkdir -p $mountextfs_tmp
 
   # Setting up the loop devices
-  blkid /dev/$KERNEL_DEVNAME?|while read line;do
+  blkid /dev/$KERNEL_DEVNAME*|while read line;do
     dev_part=`echo $line |cut -d ":" -f 1`
     # The variable part_prop will look like
     # LABEL="PartLabel" UUID="uuid" TYPE="fstype" PARTUUID="PartUuid"
@@ -67,7 +67,7 @@ mount_extfs() {
       # Create a tmp file to pause the unmount-loop script
       # and to store the loop devices, partition devices we
       # used.
-      echo $loop_device","$dev_part >> $mountextfs_tmp$KERNEL_DEVNAME
+      echo $loop_device","$dev_part >> $mountextfs_tmp"part_"$KERNEL_DEVNAME
       # Send the loop to CrosDisks to be mounted.
       dbus-send --print-reply --system --dest=org.chromium.CrosDisks \
         /org/chromium/CrosDisks org.chromium.CrosDisks.Mount \
@@ -79,9 +79,9 @@ mount_extfs() {
   # to know if the partitions are mounted.
   # Mounting the ext2/3/4 partitions.
   j=0
-  while [ "x`cat $mountextfs_tmp$KERNEL_DEVNAME`" != "x" -a $j -lt 6 ];do
+  while [ "x`cat $mountextfs_tmp"part_"$KERNEL_DEVNAME`" != "x" -a $j -lt 6 ];do
     # loop through the loop devices we created.
-    for line in `cat $mountextfs_tmp$KERNEL_DEVNAME`;do
+    for line in `cat $mountextfs_tmp"part_"$KERNEL_DEVNAME`;do
       loop_device=`echo $line|cut -d "," -f 1`
       dev_part=`echo $line|cut -d "," -f 2`
       # Get the mount directory from /proc/mounts CrosDisks
@@ -94,7 +94,7 @@ mount_extfs() {
       mount $dev_part "$mount_point" -o "$MOUNT_OPTIONS" || continue
       # Remove loop_device from the tmp file
       loop_device=`echo $loop_device|sed 's/\//\\\\\//g'`
-      sed --in-place "/$loop_device/d" $mountextfs_tmp$KERNEL_DEVNAME
+      sed --in-place "/$loop_device/d" $mountextfs_tmp"part_"$KERNEL_DEVNAME
     done
     # Try x times to give CrosDisks some time.
     j=$(( $j+1 ))
@@ -104,9 +104,10 @@ mount_extfs() {
   # the unmount-loop script to prevent newly created loop devices
   # to unmount when the ext2/3/4 partition is not mounted yet.
   # Start the unmount-loop script if it isn't already running.
-  # TODO: add a check if we can't mount a device.
-  if [ -f $mountextfs_tmp$KERNEL_DEVNAME ];then
-    rm $mountextfs_tmp$KERNEL_DEVNAME
+  # TODO: add a check if we can't mount a device, tmp file will
+  # not be empty in such case.
+  if [ -f $mountextfs_tmp"part_"$KERNEL_DEVNAME ];then
+    rm $mountextfs_tmp"part_"$KERNEL_DEVNAME
     if [ "x`ps -aux|grep unmount-loop|grep -v grep`" = "x" ];then
       /usr/local/bin/unmount-loop &
     fi
@@ -120,13 +121,13 @@ setup_udevrule() {
   # replace the old one so we can easily update the mount options.
   echo "# udev rule for mounting ext2/3/4 formatted usb devices and sd-cards" \
     > "$rules_file"
-  echo "ACTION==\"add\", SUBSYSTEM==\"block\", KERNEL==\"sd?\", \
+  echo "ACTION==\"add\", SUBSYSTEM==\"block\", KERNEL==\"sd?|mmcblk?\", \
     RUN+="\"$BINDIR/$APPLICATION -d %k -m "$MOUNT_OPTIONS"\""" >> "$rules_file"
   # Update the udev rules 
   udevadm control --reload-rules
 }
 # Mount or setting up.
-if [ $SETUP -eq 0 ];then
+if [ -z "$SETUP" ];then
   mount_extfs
 else
   setup_udevrule 

@@ -24,7 +24,7 @@ while [ "x`cat /proc/mounts|grep /dev/loop )`" != "x" -a \
     # check if our ext2/3/4 device is still mounted
     if [ "x`cat /proc/mounts|grep -v $loopdevice| \
         cut -d " " -f 2|grep -E "^$mountpoint_1$"`" = "x" \
-        -a ! -f "$mountextfs_tmp"sd? ];then
+        -a ! -f "$mountextfs_tmp"part_* ];then
       # Unmount the loopdevice and free it
       umount -d "$loopdevice" #"$mountpoint"
       #losetup -d $loopdevice
